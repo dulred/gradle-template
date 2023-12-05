@@ -38,7 +38,7 @@ public class FileController {
 
 
     @GetMapping("/exportFile1")
-    public void  exportFile1(HttpServletResponse response){
+    public void  exportFile1(String startTime,String endTime,String placeName, HttpServletResponse response){
 
         try {
             // 创建工作簿
@@ -65,9 +65,9 @@ public class FileController {
             sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 8));
 
 
-         String startTime  = "2023-05-01";
-        String endTime = "2023-06-01";
-            String  placeName = "孟连县";
+//         String startTime  = "2023-05-01";
+//        String endTime = "2023-06-01";
+//            String  placeName = "孟连县";
             // 创建第二行（小标题）
             Row subtitleRow = sheet.createRow(1);
 //           设置行高
@@ -296,7 +296,7 @@ public class FileController {
     }
 
     @GetMapping("/exportFile2")
-    public void exportFile2(HttpServletResponse response){
+    public void exportFile2(String startTime,String endTime,String placeName,HttpServletResponse response){
 
         try {
             // 创建工作簿
@@ -323,8 +323,8 @@ public class FileController {
             sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 12));
 
 
-            String startTime  = "2023-05-01";
-            String endTime = "2023-06-01";
+//            String startTime  = "2023-05-01";
+//            String endTime = "2023-06-01";
             // 创建第二行（小标题）
             Row subtitleRow = sheet.createRow(1);
 //           设置行高
@@ -405,7 +405,7 @@ public class FileController {
             Cell12.setCellStyle(getCommonCellStyle(workbook));
 
 
-            String placeName = "江城县,孟连县,澜沧县,思茅区";
+//            String placeName = "江城县,孟连县,澜沧县,思茅区";
             String place = SqlStrUtils.MutiSelection(placeName);
 
             String sql = "--办理边境通行证统计表\n" +
