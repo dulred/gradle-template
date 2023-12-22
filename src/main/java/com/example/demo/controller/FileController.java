@@ -2,12 +2,14 @@ package com.example.demo.controller;
 
 import com.example.demo.model.Bjtxz;
 import com.example.demo.model.JckBjtxz;
+import com.example.demo.model.UserTimeLeft;
 import com.example.demo.utils.SqlStrUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.jooq.DSLContext;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,10 +18,11 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URLEncoder;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 /**
  * @author dulred
@@ -28,12 +31,80 @@ import java.util.List;
  */
 @Slf4j
 @RestController
+@CrossOrigin
 public class FileController {
 
     private final DSLContext dslContext;
 
     public FileController(DSLContext dslContext) {
         this.dslContext = dslContext;
+    }
+
+@GetMapping("/timeLeft")
+    public Map timeLeft(String id){
+    long real_id = Long.valueOf(id);
+    String sql = "select created_at,modified_at  from krt_admin.ka_user where id = ?";
+    UserTimeLeft userTimeLeft = dslContext.resultQuery(sql,real_id).fetchOneInto(UserTimeLeft.class);
+
+    if (userTimeLeft.getModifiedAt()==null){
+        return lessTime(userTimeLeft.getCreatedAt());
+    }else {
+        return lessTime(userTimeLeft.getModifiedAt());
+    }
+
+    }
+
+//    去除小数，例: 2023-12-07 16:45:20.932556 ->  2023-12-07 16:45:20
+    public long removeFractionalSeconds (Date dateTime){
+        try {
+            String str ;
+            int indexOfDot  = dateTime.toString().indexOf(".");
+            if (indexOfDot !=-1){
+                str= dateTime.toString().substring(0,indexOfDot);
+            }else {
+                str= dateTime.toString();
+            }
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            Date date = sdf.parse(str);
+            // 获取日期对象的毫秒数
+            long milliseconds = date.getTime();
+            return milliseconds;
+        } catch (ParseException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
+//传入最新的修改时间，返回剩余时间
+    public Map lessTime (Date dateTime){
+        Calendar calendar = Calendar.getInstance();
+        long old = removeFractionalSeconds(dateTime);
+        calendar.setTimeInMillis(old);
+
+        calendar.add(Calendar.DAY_OF_MONTH,90);
+        long end = calendar.getTime().getTime();
+        long current = System.currentTimeMillis();
+        long less = end - current;
+        if (less<=0){
+            throw  new RuntimeException("密码已过期！请联系管理员修改密码！");
+        }
+//  分离出 天 时 分 秒
+    long days = less / (24 * 60 * 60 * 1000);
+    long hours = (less % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000);
+    long minutes = (less % (60 * 60 * 1000)) / (60 * 1000);
+    long seconds = (less % (60 * 1000)) / 1000;
+
+    HashMap map = new HashMap();
+    map.put("days",days);
+    map.put("hours",hours);
+    map.put("minutes",minutes);
+    map.put("seconds",seconds);
+
+
+//    return "days: " + days + " hours: " + hours +" Minutes: " + minutes +" Seconds: " + seconds;
+
+        return map;
+
     }
 
 
@@ -267,32 +338,14 @@ public class FileController {
         commonCellStyle.setVerticalAlignment(VerticalAlignment.CENTER);
         return commonCellStyle;
     }
-    @GetMapping("/test")
-    public  void test (){
-        String startTime  = "2023-05-01";
-        String endTime = "2023-06-01";
-        String sql = "--办理边境通行证统计表\n" +
-                "select place,sum(jck_num) jck_num,sum(single_num) single_num,sum(bm_num) bm_num,sum(pr_num) pr_num,sum(yn_num) yn_num,sum(wj_num) wj_num,sum(man_num) man_num,sum(woman_num) woman_num,sum(down_num) down_num,sum(up_num) up_num,sum(jck_p_num) jck_p_num,sum(single_p_num) single_p_num from (\n" +
-                "select substring(\"placeName\",1,3) as place,\n" +
-                "sum(case when company <> '边民' then 1 else 0 end) jck_num, --进出口贸易公司人数\n" +
-                "0 single_num,--个体公司人数\n" +
-                "sum(case when company = '边民' then 2 else 0 end) bm_num,--边民人数\n" +
-                "sum(case when substring(\"idCard\",1,4) = '5308' then 1 else 0 end) pr_num,--普洱籍人数\n" +
-                "sum(case when substring(\"idCard\",1,3) = '530' then 1 else 0 end) yn_num,--云南籍人数\n" +
-                "sum(case when substring(\"idCard\",1,3) <> '530' then 1 else 0 end) wj_num,--外籍人数\n" +
-                "sum(case when gender = '男' then 1 else 0 end) man_num,--男性办证人数\n" +
-                "sum(case when gender = '女' then 1 else 0 end) woman_num,--女性办证人数\n" +
-                "sum(case when age < '35' then 1 else 0 end) down_num, --35岁以上人数\n" +
-                "sum(case when age >= '35' then 1 else 0 end) up_num, --35岁以上人数\n" +
-                "case when company <> '边民' then count(distinct company) else 0  end as jck_p_num,--进出口公司数\n" +
-                "0 single_p_num\n" +
-                "from exit_and_entry.check_information \n" +
-                "where substring(\"placeName\",1,3) \n  in" + "('江城县','思茅区','孟连县','澜沧县')" +"--地址选择\n" +
-                "and substring(\"createTime\",1,10) between "+ "'" +startTime +"'" +" and " + "'" + endTime + "'" + " --时间范围\n" +
-                "group by substring(\"placeName\",1,3),company ) a\n" +
-                "group by place";
-        List<Bjtxz>  bjtxzs = dslContext.resultQuery(sql).fetchInto(Bjtxz.class);
-        System.out.println(bjtxzs);
+    @GetMapping("/login")
+    public  String login (String name){
+
+        if (name.equals("rex")){
+            throw  new RuntimeException("nishizhu");
+        }
+
+        return "你成功登录了!";
     }
 
     @GetMapping("/exportFile2")
